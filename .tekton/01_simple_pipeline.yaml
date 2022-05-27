@@ -1,0 +1,52 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: simple-ci
+spec:
+  workspaces:
+    - name: code-repo
+  tasks:
+    - name: fetch-code-repo
+      taskRef:
+        name: git-clone
+      params:
+        - name: url
+          value: https://github.com/coderman-engineering/hello-world
+        - name: revision
+          value: e37dc766f8e70c88e0fec339416f5670dd759e22
+      workspaces:
+        - name: output
+          workspace: code-repo
+    - name: show-contents
+      runAfter:
+        - fetch-code-repo
+      workspaces:
+        - name: source
+          workspace: code-repo
+      taskSpec:
+        workspaces:
+          - name: source
+        steps:
+          - name: find-all
+            image: ubuntu
+            workingDir: $(workspaces.source.path)
+            script: |
+              #!/usr/bin/env bash
+              find . -maxdepth 1
+
+    - name: unit-tests
+      taskRef:
+        name: golang-test
+      # Note: this is currently required to ensure order of write / read on PVC is correct.
+      runAfter:
+        - fetch-code-repo
+      params:
+        - name: package
+          value: github.com/coderman-engineering/hello-world
+        - name: packages
+          value: ./pkg/...
+        - name: flags
+          value: -v -mod=vendor
+      workspaces:
+        - name: source
+          workspace: code-repo
